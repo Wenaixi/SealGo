@@ -1,0 +1,79 @@
+version: 2
+
+project_name: SealGo
+
+env:
+  - GO111MODULE=on
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cli
+    main: ./cmd/cli/
+    binary: SealGo
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - 7
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+  - id: wasm
+    main: ./wasm/
+    binary: SealGo
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - js
+    goarch:
+      - wasm
+
+archives:
+  - id: cli-archive
+    builds: [cli]
+    name_template: >-
+      {{ .ProjectName }}-{{ .Os }}-{{ .Arch }}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: wasm-archive
+    builds: [wasm]
+    name_template: "{{ .ProjectName }}-wasm-{{ .Version }}"
+    formats: [tar.gz]
+    files:
+      - dist/wasm_exec.js
+      - dist/bridge.js
+      - dist/SealGo.wasm
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"

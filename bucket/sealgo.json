@@ -1,0 +1,25 @@
+{
+    "version": "$version",
+    "description": "XChaCha20-Poly1305 multi-recipient encrypt/decrypt CLI",
+    "homepage": "https://github.com/Wenaixi/SealGo",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/Wenaixi/SealGo/releases/download/$version/SealGo-windows-amd64.exe",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+    },
+    "bin": [
+        ["SealGo-windows-amd64.exe", "SealGo"]
+    ],
+    "checkver": {
+        "github": "https://github.com/Wenaixi/SealGo"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/Wenaixi/SealGo/releases/download/$version/SealGo-windows-amd64.exe"
+            }
+        }
+    }
+}

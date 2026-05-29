@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cli:
+    strategy:
+      matrix:
+        include:
+          - target: linux-amd64
+            runs-on: ubuntu-latest
+          - target: linux-arm64
+            runs-on: ubuntu-latest
+            cc: aarch64-linux-gnu-gcc
+          - target: darwin-amd64
+            runs-on: macos-latest
+          - target: darwin-arm64
+            runs-on: macos-latest
+          - target: windows-amd64
+            runs-on: ubuntu-latest
+            cc: x86_64-w64-mingw32-gcc
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Install ARM64 cross compiler
+        if: matrix.target == 'linux-arm64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install MinGW
+        if: matrix.target == 'windows-amd64'
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - name: Build
+        env:
+          TARGET: ${{ matrix.target }}
+          CC: ${{ matrix.cc }}
+        run: |
+          ext=""
+          if [ "$TARGET" = "windows-amd64" ]; then ext=".exe"; fi
+          if [ -n "$CC" ]; then
+            OS="${TARGET%-*}" ARCH="${TARGET#*-}"
+            CGO_ENABLED=1 GOOS="$OS" GOARCH="$ARCH" CC="$CC" go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o "SealGo-$TARGET$ext" ./cmd/cli/
+          else
+            go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o "SealGo-$TARGET$ext" ./cmd/cli/
+          fi
+      - name: Package
+        run: |
+          if [ "${{ matrix.target }}" = "windows-amd64" ]; then
+            zip "SealGo-${{ matrix.target }}.zip" "SealGo-${{ matrix.target }}.exe"
+          else
+            tar -czvf "SealGo-${{ matrix.target }}.tar.gz" "SealGo-${{ matrix.target }}"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: SealGo-*
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Build
+        run: |
+          GOOS=js GOARCH=wasm go build -o SealGo.wasm ./wasm/
+      - name: Fetch JS files
+        run: |
+          curl -sL https://raw.githubusercontent.com/golang/go/master/misc/wasm/wasm_exec.js -o wasm_exec.js
+          curl -sL https://raw.githubusercontent.com/Wenaixi/SealGo/main/wasm/bridge.js -o bridge.js || cp wasm/bridge.js bridge.js
+      - name: Package
+        run: tar -czvf SealGo-wasm-${{ github.ref_name }}.tar.gz SealGo.wasm wasm_exec.js bridge.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm
+          path: SealGo-wasm-*.tar.gz
+
+  clib:
+    strategy:
+      matrix:
+        include:
+          - target: linux-amd64
+            runs-on: ubuntu-latest
+          - target: linux-arm64
+            runs-on: ubuntu-latest
+            cc: aarch64-linux-gnu-gcc
+          - target: darwin-amd64
+            runs-on: macos-latest
+          - target: darwin-arm64
+            runs-on: macos-latest
+          - target: windows-amd64
+            runs-on: ubuntu-latest
+            cc: x86_64-w64-mingw32-gcc
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Install ARM64 cross compiler
+        if: matrix.target == 'linux-arm64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install MinGW
+        if: matrix.target == 'windows-amd64'
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - name: Build
+        env:
+          TARGET: ${{ matrix.target }}
+          CC: ${{ matrix.cc }}
+        run: |
+          ext="so"
+          prefix="libSealGo"
+          if [ "$TARGET" = "windows-amd64" ]; then ext="dll"; fi
+          if [ "$TARGET" = "darwin-amd64" ] || [ "$TARGET" = "darwin-arm64" ]; then ext="dylib"; fi
+          if [ -n "$CC" ]; then
+            OS="${TARGET%-*}" ARCH="${TARGET#*-}"
+            CGO_ENABLED=1 GOOS="$OS" GOARCH="$ARCH" CC="$CC" go build -buildmode=c-shared -o "${prefix}.${ext}" ./embed/
+          else
+            CGO_ENABLED=1 go build -buildmode=c-shared -o "${prefix}.${ext}" ./embed/
+          fi
+      - name: Copy header
+        run: cp embed/libSealGo.h libSealGo-${{ matrix.target }}.h
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "$TARGET" = "windows-amd64" ]; then
+            tar -czvf libSealGo-$TARGET.tar.gz libSealGo.dll libSealGo-$TARGET.h
+          elif [ "$TARGET" = "darwin-amd64" ] || [ "$TARGET" = "darwin-arm64" ]; then
+            tar -czvf libSealGo-$TARGET.tar.gz libSealGo.dylib libSealGo-$TARGET.h
+          else
+            tar -czvf libSealGo-$TARGET.tar.gz libSealGo.so libSealGo-$TARGET.h
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clib-${{ matrix.target }}
+          path: libSealGo-*.tar.gz
+
+  upload:
+    needs: [cli, wasm, clib]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: artifacts
+          merge-multiple: true
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: artifacts/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

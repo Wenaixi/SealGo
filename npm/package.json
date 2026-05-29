@@ -1,0 +1,37 @@
+{
+  "name": "sealgo-wasm",
+  "version": "0.1.1",
+  "description": "XChaCha20-Poly1305 streaming encryption for the browser (WASM)",
+  "main": "index.js",
+  "module": "index.js",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "bridge.js",
+    "wasm_exec.js",
+    "SealGo.wasm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Wenaixi/SealGo.git"
+  },
+  "keywords": [
+    "encryption",
+    "xchacha20",
+    "poly1305",
+    "wasm",
+    "streaming-crypto",
+    "cryptography",
+    "sealgo"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Wenaixi/SealGo/issues"
+  },
+  "homepage": "https://github.com/Wenaixi/SealGo#readme"
+}
